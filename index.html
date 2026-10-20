@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imposter</title>
+<style>
+  :root {
+    --bg: #14151c;
+    --card: #1f2130;
+    --card-2: #2a2d42;
+    --text: #f2f3f8;
+    --muted: #8d91a8;
+    --accent: #6c7bff;
+    --danger: #ff5c6c;
+    --ok: #3ecf8e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .app { width: 100%; max-width: 440px; }
+  h1 { text-align: center; margin: 0 0 4px; font-size: 2rem; letter-spacing: 1px; }
+  .sub { text-align: center; color: var(--muted); margin: 0 0 24px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .panel {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .panel h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  .row { display: flex; gap: 8px; }
+  input[type="text"], select {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background: var(--card-2);
+    color: var(--text);
+    font-size: 1rem;
+  }
+  select { width: 100%; }
+  input[type="text"]:focus, select:focus { outline: none; border-color: var(--accent); }
+  button {
+    border: none;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    cursor: pointer;
+  }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.secondary { background: var(--card-2); }
+  button.danger { background: var(--danger); }
+  button.big { width: 100%; padding: 16px; font-size: 1.1rem; }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+
+  /* Sprachumschalter */
+  .lang { display: flex; justify-content: center; gap: 8px; margin-bottom: 18px; }
+  .lang button { padding: 6px 14px; font-size: 0.9rem; background: var(--card-2); color: var(--muted); }
+  .lang button.active { background: var(--accent); color: #fff; }
+
+  ul.players { list-style: none; margin: 12px 0 0; padding: 0; }
+  ul.players li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card-2);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+  ul.players li span { word-break: break-word; }
+  ul.players li button { padding: 6px 10px; background: transparent; color: var(--danger); font-size: 1.1rem; }
+  .empty { color: var(--muted); margin: 12px 0 0; font-size: 0.95rem; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; color: var(--muted); font-size: 0.9rem; margin-bottom: 6px; }
+  .error { color: var(--danger); min-height: 1.3em; margin: 0 0 8px; text-align: center; font-size: 0.95rem; }
+
+  /* Aufdecken */
+  .counter { text-align: center; color: var(--muted); margin-bottom: 8px; }
+  .player-name { text-align: center; font-size: 1.8rem; font-weight: 700; margin: 0 0 18px; word-break: break-word; }
+  .word-box {
+    position: relative;
+    background: var(--card);
+    border-radius: 16px;
+    min-height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    margin-bottom: 18px;
+    overflow: hidden;
+  }
+  .word-text { font-size: 2.2rem; font-weight: 800; word-break: break-word; }
+  .word-text.imposter { color: var(--danger); }
+  .cover {
+    position: absolute;
+    inset: 0;
+    background: #3a3d52;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .cover.hidden { display: none; }
+
+  /* Spiel läuft */
+  .playing { text-align: center; padding: 30px 18px; }
+  .playing h2 { font-size: 1.6rem; margin-bottom: 8px; }
+  .playing p { color: var(--muted); margin: 0; }
+  .result { text-align: center; margin-bottom: 16px; }
+  .result .label { color: var(--muted); margin-bottom: 8px; }
+  .result .names { font-size: 1.8rem; font-weight: 800; color: var(--danger); word-break: break-word; }
+  .result .word { margin-top: 14px; color: var(--muted); }
+  .result .word b { color: var(--ok); }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>IMPOSTER</h1>
+  <p class="sub" data-i18n="subtitle"></p>
+
+  <!-- EINSTELLUNGEN -->
+  <section id="screen-setup" class="screen active">
+    <div class="lang">
+      <button type="button" id="lang-de">Deutsch</button>
+      <button type="button" id="lang-en">English</button>
+    </div>
+
+    <div class="panel">
+      <h2 data-i18n="players"></h2>
+      <div class="row">
+        <input type="text" id="name-input" data-i18n-ph="namePlaceholder" maxlength="20" autocomplete="off">
+        <button type="button" id="add-btn" data-i18n="add"></button>
+      </div>
+      <ul id="player-list" class="players"></ul>
+      <p id="empty-msg" class="empty" data-i18n="noPlayers"></p>
+    </div>
+
+    <div class="panel">
+      <h2 data-i18n="options"></h2>
+      <div class="field">
+        <label for="imposter-count" data-i18n="imposterCount"></label>
+        <select id="imposter-count">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label for="category" data-i18n="category"></label>
+        <select id="category"></select>
+      </div>
+    </div>
+
+    <p id="setup-error" class="error"></p>
+    <button id="start-btn" class="big" data-i18n="startGame"></button>
+  </section>
+
+  <!-- AUFDECKEN -->
+  <section id="screen-reveal" class="screen">
+    <div class="counter" id="reveal-counter"></div>
+    <div class="player-name" id="reveal-name"></div>
+    <div class="word-box">
+      <div class="word-text" id="reveal-word"></div>
+      <div class="cover" id="reveal-cover" data-i18n="covered"></div>
+    </div>
+    <div class="stack">
+      <button id="open-btn" class="big" data-i18n="open"></button>
+      <button id="hide-btn" class="big secondary" style="display:none" data-i18n="hide"></button>
+      <button id="next-btn" class="big" style="display:none"></button>
+    </div>
+  </section>
+
+  <!-- SPIEL LÄUFT -->
+  <section id="screen-playing" class="screen">
+    <div class="panel playing" id="playing-panel">
+      <h2 data-i18n="gameRunning"></h2>
+      <p id="playing-text"></p>
+    </div>
+    <div id="result" class="panel result" style="display:none">
+      <div class="label" id="result-label"></div>
+      <div class="names" id="result-names"></div>
+      <div class="word"><span data-i18n="wordWas"></span> <b id="result-word"></b></div>
+    </div>
+    <div class="stack">
+      <button id="show-btn" class="big danger" data-i18n="showImposter"></button>
+      <button id="again-btn" class="big" style="display:none" data-i18n="newRound"></button>
+      <button id="end-btn" class="big secondary" data-i18n="endGame"></button>
+    </div>
+  </section>
+</div>
+
+<script>
+  // ---- Texte (Deutsch / English) ----
+  const TEXT = {
+    de: {
+      subtitle: "Gib das Handy weiter und finde den Imposter.",
+      players: "Spieler",
+      namePlaceholder: "Name eingeben",
+      add: "Hinzufügen",
+      noPlayers: "Noch keine Spieler. Füge mindestens 3 hinzu.",
+      options: "Optionen",
+      imposterCount: "Anzahl der Imposter",
+      category: "Kategorie",
+      random: "Zufällig (alle Kategorien)",
+      startGame: "Spiel starten",
+      covered: "Verdeckt",
+      open: "Öffnen",
+      hide: "Verstecken",
+      nextPlayer: "Nächster Spieler",
+      beginGame: "Spiel beginnen",
+      playerOf: "Spieler {a} von {b}",
+      imposterWord: "IMPOSTER",
+      gameRunning: "Das Spiel läuft",
+      startsFirst: "{name} fängt an! Redet miteinander und findet heraus, wer der Imposter ist.",
+      showImposter: "Zeige, wer der Imposter ist",
+      newRound: "Neue Runde (gleiche Spieler)",
+      endGame: "Spiel beenden",
+      imposterIs: "Der Imposter ist",
+      impostersAre: "Die Imposter sind",
+      wordWas: "Das Wort war:",
+      remove: "{name} entfernen",
+      errDuplicate: "Dieser Name ist schon vergeben.",
+      errMinPlayers: "Du brauchst mindestens 3 Spieler.",
+      errTooMany: "Es müssen weniger Imposter als Spieler sein.",
+      errEmptyCat: "Die Kategorie „{cat}“ ist noch leer. Füge erst Wörter hinzu."
+    },
+    en: {
+      subtitle: "Pass the phone around and find the imposter.",
+      players: "Players",
+      namePlaceholder: "Enter a name",
+      add: "Add",
+      noPlayers: "No players yet. Add at least 3.",
+      options: "Options",
+      imposterCount: "Number of imposters",
+      category: "Category",
+      random: "Random (all categories)",
+      startGame: "Start game",
+      covered: "Hidden",
+      open: "Open",
+      hide: "Hide",
+      nextPlayer: "Next player",
+      beginGame: "Begin the game",
+      playerOf: "Player {a} of {b}",
+      imposterWord: "IMPOSTER",
+      gameRunning: "The game is on",
+      startsFirst: "{name} starts! Talk to each other and figure out who the imposter is.",
+      showImposter: "Show who the imposter is",
+      newRound: "New round (same players)",
+      endGame: "End game",
+      imposterIs: "The imposter is",
+      impostersAre: "The imposters are",
+      wordWas: "The word was:",
+      remove: "Remove {name}",
+      errDuplicate: "That name is already taken.",
+      errMinPlayers: "You need at least 3 players.",
+      errTooMany: "There must be fewer imposters than players.",
+      errEmptyCat: "The category “{cat}” is still empty. Add some words first."
+    }
+  };
+
+  // ---- Kategorien und Wörter (hier kannst du jederzeit Wörter ergänzen) ----
+  const CATEGORIES = [
+    { id: "trends", name: { de: "Trends", en: "Trends" }, words: {
+      de: ["Labubu", "Dubai-Schokolade", "Matcha", "Padel", "Pilates", "Heißluftfritteuse", "Thrifting", "Skincare", "Stanley-Becher", "Bubble Tea", "Sneaker", "Podcast", "Cold Plunge", "Duolingo", "Oversize-Hoodie", "Pickleball", "Reels", "Smartwatch", "Wordle", "Tanghulu"],
+      en: ["Labubu", "Dubai chocolate", "Matcha", "Padel", "Pilates", "Air fryer", "Thrifting", "Skincare", "Stanley cup", "Bubble tea", "Sneakers", "Podcast", "Cold plunge", "Duolingo", "Oversized hoodie", "Pickleball", "Reels", "Smartwatch", "Wordle", "Tanghulu"] } },
+    { id: "spicy", name: { de: "Spicy", en: "Spicy" }, words: {
+      de: ["Kuss", "Flirten", "Knutschfleck", "Massage", "Sauna", "Bikini", "Candle-Light-Dinner", "Tinder", "Lippenstift", "Seitensprung", "Kuscheln", "Dessous", "Ex", "One-Night-Stand", "Valentinstag", "Hotelzimmer", "Schmetterlinge im Bauch", "Blind Date", "Schlafzimmer", "Eifersucht"],
+      en: ["Kiss", "Flirting", "Hickey", "Massage", "Sauna", "Bikini", "Candlelight dinner", "Tinder", "Lipstick", "Affair", "Cuddling", "Lingerie", "Ex", "One-night stand", "Valentine's Day", "Hotel room", "Butterflies in your stomach", "Blind date", "Bedroom", "Jealousy"] } },
+    { id: "brands", name: { de: "Marken", en: "Brands" }, words: {
+      de: ["Nike", "Adidas", "Apple", "IKEA", "Coca-Cola", "McDonald's", "Lidl", "Aldi", "Netflix", "Spotify", "Zara", "Samsung", "BMW", "Haribo", "Red Bull", "Nutella", "Rewe", "Puma", "Lego", "PlayStation"],
+      en: ["Nike", "Adidas", "Apple", "IKEA", "Coca-Cola", "McDonald's", "Lidl", "Aldi", "Netflix", "Spotify", "Zara", "Samsung", "BMW", "Haribo", "Red Bull", "Nutella", "Starbucks", "Puma", "Lego", "PlayStation"] } },
+    { id: "movies", name: { de: "Filme und Serien", en: "Movies & Series" }, words: {
+      de: ["Harry Potter", "Titanic", "Der Herr der Ringe", "Star Wars", "Stranger Things", "Squid Game", "Breaking Bad", "Game of Thrones", "Fack ju Göhte", "Dark", "Shrek", "Findet Nemo", "Der Pate", "Friends", "Barbie", "Matrix", "Jurassic Park", "Wednesday", "Haus des Geldes", "Avatar"],
+      en: ["Harry Potter", "Titanic", "The Lord of the Rings", "Star Wars", "Stranger Things", "Squid Game", "Breaking Bad", "Game of Thrones", "The Hangover", "Dark", "Shrek", "Finding Nemo", "The Godfather", "Friends", "Barbie", "The Matrix", "Jurassic Park", "Wednesday", "Money Heist", "Avatar"] } },
+    { id: "slang", name: { de: "Jugendsprache", en: "Slang" }, words: {
+      de: ["Digga", "Cringe", "Wallah", "Lost", "Safe", "Ehrenmann", "Slay", "Aura", "Läuft bei dir", "Goofy", "Sus", "Rizz", "Mid", "Talahon", "Sigma", "Yolo", "Bro", "Hater", "Vibe", "Flexen"],
+      en: ["Cringe", "Rizz", "Slay", "No cap", "Bet", "Sus", "Mid", "Aura", "Goofy", "Vibe", "Flex", "Lowkey", "Bussin", "Salty", "Simp", "Drip", "Sigma", "Yolo", "Hater", "Fire"] } },
+    { id: "genz", name: { de: "Gen Z", en: "Gen Z" }, words: {
+      de: ["TikTok", "Snapchat", "BeReal", "Streaks", "Skibidi", "Girl Dinner", "Brainrot", "Doomscrollen", "Ghosting", "Situationship", "Main Character", "Red Flag", "Green Flag", "Quiet Quitting", "AirPods", "Crocs", "Shein", "FOMO", "Digital Detox", "Close Friends"],
+      en: ["TikTok", "Snapchat", "BeReal", "Streaks", "Skibidi", "Girl dinner", "Brain rot", "Doomscrolling", "Ghosting", "Situationship", "Main character", "Red flag", "Green flag", "Quiet quitting", "AirPods", "Crocs", "Shein", "FOMO", "Digital detox", "Close friends"] } },
+    { id: "anime", name: { de: "Anime", en: "Anime" }, words: {
+      de: ["Naruto", "One Piece", "Dragon Ball", "Attack on Titan", "Death Note", "Pokémon", "Demon Slayer", "My Hero Academia", "Sailor Moon", "Das wandelnde Schloss", "Totoro", "Jujutsu Kaisen", "Fullmetal Alchemist", "Bleach", "Tokyo Ghoul", "One Punch Man", "Detektiv Conan", "Hunter x Hunter", "Goku", "Ruffy"],
+      en: ["Naruto", "One Piece", "Dragon Ball", "Attack on Titan", "Death Note", "Pokémon", "Demon Slayer", "My Hero Academia", "Sailor Moon", "Howl's Moving Castle", "Totoro", "Jujutsu Kaisen", "Fullmetal Alchemist", "Bleach", "Tokyo Ghoul", "One Punch Man", "Detective Conan", "Hunter x Hunter", "Goku", "Luffy"] } },
+    { id: "nature", name: { de: "Tiere und Natur", en: "Animals & Nature" }, words: {
+      de: ["Löwe", "Pinguin", "Delfin", "Wald", "Vulkan", "Wasserfall", "Regenbogen", "Gewitter", "Korallenriff", "Wüste", "Eule", "Kolibri", "Faultier", "Gebirge", "Nordlicht", "Dschungel", "Oktopus", "Biene", "Gletscher", "Sonnenblume"],
+      en: ["Lion", "Penguin", "Dolphin", "Forest", "Volcano", "Waterfall", "Rainbow", "Thunderstorm", "Coral reef", "Desert", "Owl", "Hummingbird", "Sloth", "Mountains", "Northern lights", "Jungle", "Octopus", "Bee", "Glacier", "Sunflower"] } },
+    { id: "stars", name: { de: "Stars und Celebrities", en: "Stars & Celebrities" }, words: {
+      de: ["Taylor Swift", "Cristiano Ronaldo", "Lionel Messi", "Elon Musk", "Rihanna", "Beyoncé", "Kim Kardashian", "Billie Eilish", "Drake", "Tom Cruise", "Leonardo DiCaprio", "Helene Fischer", "Till Lindemann", "Heidi Klum", "Joko Winterscheidt", "Cardi B", "MrBeast", "Lena Meyer-Landrut", "Dwayne Johnson", "Zendaya"],
+      en: ["Taylor Swift", "Cristiano Ronaldo", "Lionel Messi", "Elon Musk", "Rihanna", "Beyoncé", "Kim Kardashian", "Billie Eilish", "Drake", "Tom Cruise", "Leonardo DiCaprio", "Ed Sheeran", "Ariana Grande", "Kylie Jenner", "Justin Bieber", "Cardi B", "MrBeast", "Selena Gomez", "Dwayne Johnson", "Zendaya"] } },
+    // Die Seifenblase ist noch leer – trag hier später deine eigenen Wörter ein, z. B. de: ["Wort1", "Wort2"]
+    { id: "bubble", name: { de: "Seifenblase", en: "Soap Bubble" }, words: { de: [], en: [] } },
+    { id: "music", name: { de: "Musik", en: "Music" }, words: {
+      de: ["Gitarre", "Klavier", "Schlagzeug", "Konzert", "Mikrofon", "Kopfhörer", "DJ", "Festival", "Karaoke", "Chor", "Refrain", "Vinyl", "Rap", "Techno", "Geige", "Playlist", "Bass", "Orchester", "Tonleiter", "Album"],
+      en: ["Guitar", "Piano", "Drums", "Concert", "Microphone", "Headphones", "DJ", "Festival", "Karaoke", "Choir", "Chorus", "Vinyl", "Rap", "Techno", "Violin", "Playlist", "Bass", "Orchestra", "Scale", "Album"] } },
+    { id: "games", name: { de: "Videospiele", en: "Video Games" }, words: {
+      de: ["Minecraft", "Fortnite", "FIFA", "Super Mario", "Zelda", "GTA", "Among Us", "Roblox", "Tetris", "Pac-Man", "League of Legends", "Call of Duty", "Pokémon", "Counter-Strike", "Die Sims", "Valorant", "Fallout", "Animal Crossing", "Skyrim", "Rocket League"],
+      en: ["Minecraft", "Fortnite", "FIFA", "Super Mario", "Zelda", "GTA", "Among Us", "Roblox", "Tetris", "Pac-Man", "League of Legends", "Call of Duty", "Pokémon", "Counter-Strike", "The Sims", "Valorant", "Fallout", "Animal Crossing", "Skyrim", "Rocket League"] } },
+    { id: "memes", name: { de: "Memes", en: "Memes" }, words: {
+      de: ["Doge", "Grumpy Cat", "Rickroll", "Pepe", "Trollface", "Distracted Boyfriend", "Nyan Cat", "Harold", "Karen", "Gigachad", "Stonks", "Bonk", "Baby Yoda", "Ohio", "Sigma Male", "Skibidi Toilet", "Cheems", "Huh-Katze", "Moo Deng", "Chad"],
+      en: ["Doge", "Grumpy Cat", "Rickroll", "Pepe", "Trollface", "Distracted Boyfriend", "Nyan Cat", "Harold", "Karen", "Gigachad", "Stonks", "Bonk", "Baby Yoda", "Ohio", "Sigma Male", "Skibidi Toilet", "Cheems", "Huh Cat", "Moo Deng", "Chad"] } },
+    { id: "anatomy", name: { de: "Anatomie", en: "Anatomy" }, words: {
+      de: ["Herz", "Lunge", "Leber", "Niere", "Gehirn", "Magen", "Wirbelsäule", "Schädel", "Rippen", "Zwerchfell", "Darm", "Blase", "Oberschenkel", "Ellenbogen", "Kniescheibe", "Bauchnabel", "Zunge", "Daumen", "Fußsohle", "Gaumen"],
+      en: ["Heart", "Lung", "Liver", "Kidney", "Brain", "Stomach", "Spine", "Skull", "Ribs", "Diaphragm", "Intestine", "Bladder", "Thigh", "Elbow", "Kneecap", "Belly button", "Tongue", "Thumb", "Sole", "Palate"] } },
+    { id: "history", name: { de: "Historische Figuren", en: "Historical Figures" }, words: {
+      de: ["Napoleon", "Kleopatra", "Albert Einstein", "Julius Caesar", "Leonardo da Vinci", "Martin Luther", "Karl der Große", "Marie Curie", "Gandhi", "Abraham Lincoln", "Dschingis Khan", "Mozart", "Beethoven", "Goethe", "Königin Victoria", "Sisi", "Friedrich der Große", "Christoph Kolumbus", "Alexander der Große", "Nelson Mandela"],
+      en: ["Napoleon", "Cleopatra", "Albert Einstein", "Julius Caesar", "Leonardo da Vinci", "Martin Luther", "Charlemagne", "Marie Curie", "Gandhi", "Abraham Lincoln", "Genghis Khan", "Mozart", "Beethoven", "Goethe", "Queen Victoria", "Sisi", "Frederick the Great", "Christopher Columbus", "Alexander the Great", "Nelson Mandela"] } },
+    { id: "drinks", name: { de: "Getränke", en: "Drinks" }, words: {
+      de: ["Cola", "Apfelschorle", "Club-Mate", "Kaffee", "Tee", "Bier", "Weißwein", "Sekt", "Mojito", "Limonade", "Milchshake", "Smoothie", "Energydrink", "Wasser", "Aperol Spritz", "Eistee", "Glühwein", "Orangensaft", "Kakao", "Radler"],
+      en: ["Cola", "Apple spritzer", "Iced coffee", "Coffee", "Tea", "Beer", "White wine", "Champagne", "Mojito", "Lemonade", "Milkshake", "Smoothie", "Energy drink", "Water", "Aperol Spritz", "Iced tea", "Mulled wine", "Orange juice", "Hot chocolate", "Margarita"] } },
+    { id: "appliances", name: { de: "Haushaltsgeräte", en: "Household Appliances" }, words: {
+      de: ["Staubsauger", "Waschmaschine", "Toaster", "Mikrowelle", "Kühlschrank", "Geschirrspüler", "Wasserkocher", "Bügeleisen", "Föhn", "Mixer", "Kaffeemaschine", "Trockner", "Backofen", "Herd", "Dunstabzugshaube", "Saugroboter", "Heißluftfritteuse", "Rasierer", "Ventilator", "Gefrierschrank"],
+      en: ["Vacuum cleaner", "Washing machine", "Toaster", "Microwave", "Fridge", "Dishwasher", "Kettle", "Iron", "Hair dryer", "Blender", "Coffee machine", "Dryer", "Oven", "Stove", "Extractor hood", "Robot vacuum", "Air fryer", "Shaver", "Fan", "Freezer"] } }
+  ];
+  const RANDOM_ID = "random";
+
+  // ---- Zustand ----
+  let lang = "de";
+  let players = [];
+  let state = null; // { word, imposters:Set, index, order }
+
+  // ---- Hilfsfunktionen ----
+  const $ = id => document.getElementById(id);
+  const screens = { setup: $("screen-setup"), reveal: $("screen-reveal"), playing: $("screen-playing") };
+
+  function t(key, vars) {
+    let s = TEXT[lang][key] || key;
+    if (vars) Object.keys(vars).forEach(k => { s = s.split("{" + k + "}").join(vars[k]); });
+    return s;
+  }
+
+  function show(name) {
+    Object.values(screens).forEach(s => s.classList.remove("active"));
+    screens[name].classList.add("active");
+    window.scrollTo(0, 0);
+  }
+
+  // ---- Sprache ----
+  function fillCategories() {
+    const sel = $("category");
+    const previous = sel.value || RANDOM_ID;
+    sel.innerHTML = "";
+    const first = document.createElement("option");
+    first.value = RANDOM_ID;
+    first.textContent = t("random");
+    sel.appendChild(first);
+    CATEGORIES.forEach(c => {
+      const o = document.createElement("option");
+      o.value = c.id;
+      o.textContent = c.name[lang];
+      sel.appendChild(o);
+    });
+    sel.value = previous;
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+    $("lang-de").classList.toggle("active", lang === "de");
+    $("lang-en").classList.toggle("active", lang === "en");
+    $("playing-text").textContent = "";
+    $("setup-error").textContent = "";
+    fillCategories();
+    renderPlayers();
+  }
+
+  function setLanguage(l) {
+    lang = l;
+    try { localStorage.setItem("imposter-lang", l); } catch (e) {}
+    applyLanguage();
+  }
+  $("lang-de").addEventListener("click", () => setLanguage("de"));
+  $("lang-en").addEventListener("click", () => setLanguage("en"));
+
+  // ---- Spieler ----
+  function renderPlayers() {
+    const list = $("player-list");
+    list.innerHTML = "";
+    players.forEach((name, i) => {
+      const li = document.createElement("li");
+      const span = document.createElement("span");
+      span.textContent = name;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "✕";
+      btn.setAttribute("aria-label", t("remove", { name: name }));
+      btn.onclick = () => { players.splice(i, 1); renderPlayers(); };
+      li.append(span, btn);
+      list.appendChild(li);
+    });
+    $("empty-msg").style.display = players.length ? "none" : "block";
+  }
+
+  function addPlayer() {
+    const input = $("name-input");
+    const name = input.value.trim();
+    if (!name) return;
+    if (players.some(p => p.toLowerCase() === name.toLowerCase())) {
+      $("setup-error").textContent = t("errDuplicate");
+      return;
+    }
+    $("setup-error").textContent = "";
+    players.push(name);
+    input.value = "";
+    input.focus();
+    renderPlayers();
+  }
+  $("add-btn").addEventListener("click", addPlayer);
+  $("name-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); addPlayer(); }
+  });
+
+  // ---- Spiel starten ----
+  function shuffled(n) {
+    const a = Array.from({ length: n }, (_, i) => i);
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function pickWord() {
+    const id = $("category").value;
+    const pool = id === RANDOM_ID
+      ? CATEGORIES.flatMap(c => c.words[lang])
+      : CATEGORIES.find(c => c.id === id).words[lang];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function startGame() {
+    const err = $("setup-error");
+    if (players.length < 3) { err.textContent = t("errMinPlayers"); return; }
+    const count = parseInt($("imposter-count").value, 10);
+    if (count >= players.length) { err.textContent = t("errTooMany"); return; }
+    const id = $("category").value;
+    if (id !== RANDOM_ID) {
+      const cat = CATEGORIES.find(c => c.id === id);
+      if (cat.words[lang].length === 0) {
+        err.textContent = t("errEmptyCat", { cat: cat.name[lang] });
+        return;
+      }
+    }
+    err.textContent = "";
+
+    const impostersIdx = shuffled(players.length).slice(0, count);
+    state = {
+      word: pickWord(),
+      imposters: new Set(impostersIdx),
+      index: 0,
+      order: shuffled(players.length)
+    };
+    showPlayerTurn();
+    show("reveal");
+  }
+  $("start-btn").onclick = startGame;
+
+  // ---- Wort aufdecken ----
+  function showPlayerTurn() {
+    const i = state.index;
+    const p = state.order[i];
+    $("reveal-counter").textContent = t("playerOf", { a: i + 1, b: players.length });
+    $("reveal-name").textContent = players[p];
+    const w = $("reveal-word");
+    if (state.imposters.has(p)) {
+      w.textContent = t("imposterWord");
+      w.classList.add("imposter");
+    } else {
+      w.textContent = state.word;
+      w.classList.remove("imposter");
+    }
+    $("reveal-cover").classList.remove("hidden");
+    $("open-btn").style.display = "";
+    $("hide-btn").style.display = "none";
+    $("next-btn").style.display = "none";
+  }
+
+  $("open-btn").onclick = () => {
+    $("reveal-cover").classList.add("hidden");
+    $("open-btn").style.display = "none";
+    $("hide-btn").style.display = "";
+  };
+
+  $("hide-btn").onclick = () => {
+    $("reveal-cover").classList.remove("hidden");
+    $("hide-btn").style.display = "none";
+    const last = state.index === players.length - 1;
+    $("next-btn").textContent = last ? t("beginGame") : t("nextPlayer");
+    $("next-btn").style.display = "";
+  };
+
+  $("next-btn").onclick = () => {
+    if (state.index < players.length - 1) {
+      state.index++;
+      showPlayerTurn();
+    } else {
+      $("result").style.display = "none";
+      $("playing-panel").style.display = "";
+      $("show-btn").style.display = "";
+      $("again-btn").style.display = "none";
+      const starter = players[Math.floor(Math.random() * players.length)];
+      $("playing-text").textContent = t("startsFirst", { name: starter });
+      show("playing");
+    }
+  };
+
+  // ---- Spiel läuft ----
+  $("show-btn").onclick = () => {
+    const names = [...state.imposters].sort((a, b) => a - b).map(i => players[i]);
+    $("result-label").textContent = names.length > 1 ? t("impostersAre") : t("imposterIs");
+    $("result-names").textContent = names.join(" & ");
+    $("result-word").textContent = state.word;
+    $("playing-panel").style.display = "none";
+    $("result").style.display = "";
+    $("show-btn").style.display = "none";
+    $("again-btn").style.display = "";
+  };
+
+  $("again-btn").onclick = startGame;
+
+  $("end-btn").onclick = () => {
+    state = null;
+    show("setup");
+  };
+
+  // ---- Start ----
+  try {
+    const saved = localStorage.getItem("imposter-lang");
+    if (saved === "de" || saved === "en") lang = saved;
+  } catch (e) {}
+  applyLanguage();
+</script>
+</body>
+</html>
